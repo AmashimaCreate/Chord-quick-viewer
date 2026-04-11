@@ -1,1 +1,526 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chord Quick Viewer</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { -webkit-text-size-adjust:100%; }
+  button { -webkit-appearance:none; -moz-appearance:none; appearance:none; }
+</style>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useMemo } = React;
 
+/* ═══════════════════════════════════════════════════════
+   CHORD QUICK VIEWER v6.4
+   24タイプ・4カテゴリ・フォームDB拡張版
+
+   自動導出の仕組み:
+   - computeFormDegreeInfo: frets + rootPc + chordType → degLabels + omittedDegrees
+   - FORM_DB には frets のみ持ち、degLabels / omittedDegrees は実行時に計算
+
+   ルート選択の仕組み:
+   - 7つのナチュラル音ボタン（C D E F G A B）で基本ルートを選択
+   - ♯/♭ ボタンで臨時記号付きルートへ移動（トグル動作）
+   - useFlat は♯/♭どちらの側で臨時記号音を選んだかの状態
+   ═══════════════════════════════════════════════════════ */
+
+const NOTES_SHARP = ["C","C♯","D","D♯","E","F","F♯","G","G♯","A","A♯","B"];
+const NOTES_FLAT  = ["C","D♭","D","E♭","E","F","G♭","G","A♭","A","B♭","B"];
+const NATURAL_PCS = new Set([0,2,4,5,7,9,11]);
+const mod12 = n => ((n % 12) + 12) % 12;
+const TUNING_PC = [4, 9, 2, 7, 11, 4];
+
+const CATEGORIES = [
+  { key: "basic",   label: "基本" },
+  { key: "seventh", label: "7系" },
+  { key: "tension", label: "テンション" },
+  { key: "special", label: "その他" },
+];
+
+const CHORD_TYPES = {
+  M:       { suffix:"",         uiLabel:"M",       cat:"basic",   iv:[0,4,7],          deg:["R","3","5"] },
+  m:       { suffix:"m",        uiLabel:"m",       cat:"basic",   iv:[0,3,7],          deg:["R","♭3","5"] },
+  sus4:    { suffix:"sus4",     uiLabel:"sus4",    cat:"basic",   iv:[0,5,7],          deg:["R","4","5"] },
+  aug:     { suffix:"aug",      uiLabel:"aug",     cat:"basic",   iv:[0,4,8],          deg:["R","3","♯5"] },
+  dim:     { suffix:"dim",      uiLabel:"dim",     cat:"basic",   iv:[0,3,6],          deg:["R","♭3","♭5"] },
+  M7:      { suffix:"M7",       uiLabel:"M7",      cat:"seventh", iv:[0,4,7,11],       deg:["R","3","5","7"] },
+  m7:      { suffix:"m7",       uiLabel:"m7",      cat:"seventh", iv:[0,3,7,10],       deg:["R","♭3","5","♭7"] },
+  "7":     { suffix:"7",        uiLabel:"7",       cat:"seventh", iv:[0,4,7,10],       deg:["R","3","5","♭7"] },
+  mM7:     { suffix:"mM7",      uiLabel:"mM7",     cat:"seventh", iv:[0,3,7,11],       deg:["R","♭3","5","7"] },
+  m7b5:    { suffix:"m7(♭5)",   uiLabel:"m7♭5",    cat:"seventh", iv:[0,3,6,10],       deg:["R","♭3","♭5","♭7"] },
+  dim7:    { suffix:"dim7",     uiLabel:"dim7",    cat:"seventh", iv:[0,3,6,9],        deg:["R","♭3","♭5","°7"] },
+  "9":     { suffix:"9",        uiLabel:"9",       cat:"tension", iv:[0,4,7,10,2],     deg:["R","3","5","♭7","9"] },
+  m9:      { suffix:"m9",       uiLabel:"m9",      cat:"tension", iv:[0,3,7,10,2],     deg:["R","♭3","5","♭7","9"] },
+  M9:      { suffix:"M9",       uiLabel:"M9",      cat:"tension", iv:[0,4,7,11,2],     deg:["R","3","5","7","9"] },
+  "11":    { suffix:"11",       uiLabel:"11",      cat:"tension", iv:[0,4,7,10,2,5],   deg:["R","3","5","♭7","9","11"] },
+  m11:     { suffix:"m11",      uiLabel:"m11",     cat:"tension", iv:[0,3,7,10,2,5],   deg:["R","♭3","5","♭7","9","11"] },
+  "13":    { suffix:"13",       uiLabel:"13",      cat:"tension", iv:[0,4,7,10,2,9],   deg:["R","3","5","♭7","9","13"] },
+  M13:     { suffix:"M13",      uiLabel:"M13",     cat:"tension", iv:[0,4,7,11,2,9],   deg:["R","3","5","7","9","13"] },
+  b13:     { suffix:"b13",      uiLabel:"b13",     cat:"tension", iv:[0,4,7,10,8],     deg:["R","3","5","♭7","♭13"] },
+  add9:    { suffix:"add9",     uiLabel:"add9",    cat:"tension", iv:[0,4,7,2],        deg:["R","3","5","9"] },
+  "69":    { suffix:"69",       uiLabel:"69",      cat:"tension", iv:[0,4,7,9,2],      deg:["R","3","5","6","9"] },
+  "6":     { suffix:"6",        uiLabel:"6",       cat:"special", iv:[0,4,7,9],        deg:["R","3","5","6"] },
+  m6:      { suffix:"m6",       uiLabel:"m6",      cat:"special", iv:[0,3,7,9],        deg:["R","♭3","5","6"] },
+  "7#9":   { suffix:"7(♯9)",    uiLabel:"7(♯9)",   cat:"special", iv:[0,4,7,10,3],     deg:["R","3","5","♭7","♯9"] },
+};
+
+const TYPE_ORDER = CATEGORIES.flatMap(cat =>
+  Object.keys(CHORD_TYPES).filter(k => CHORD_TYPES[k].cat === cat.key)
+);
+
+const FAMILY_LABEL = { open:"オープン", barre:"バレー", partial:"部分" };
+
+function computeFormDegreeInfo(frets, rootPc, chordType) {
+  const ct = CHORD_TYPES[chordType];
+  if (!ct) return { degLabels: frets.map(() => ""), omittedDegrees: [] };
+  const ivToDeg = {};
+  ct.iv.forEach((iv, i) => { ivToDeg[iv] = ct.deg[i]; });
+  const present = new Set();
+  const degLabels = frets.map((f, si) => {
+    if (f === -1) return "";
+    const pc = mod12(TUNING_PC[si] + f);
+    const interval = mod12(pc - rootPc);
+    const deg = ivToDeg[interval] || "";
+    if (deg) present.add(deg);
+    return deg;
+  });
+  const omittedDegrees = ct.deg.filter(d => d !== "R" && !present.has(d));
+  return { degLabels, omittedDegrees };
+}
+
+const FORM_DB = {
+  M: [
+    { id:"M-oc",label:"Cオープン",rootKey:0,frets:[-1,3,2,0,1,0],movable:false,rootString:5,family:"open",shapeName:"C" },
+    { id:"M-og",label:"Gオープン",rootKey:7,frets:[3,2,0,0,0,3],movable:false,rootString:6,family:"open",shapeName:"G" },
+    { id:"M-od",label:"Dオープン",rootKey:2,frets:[-1,-1,0,2,3,2],movable:false,rootString:4,family:"open",shapeName:"D" },
+    { id:"M-oe",label:"Eオープン",rootKey:4,frets:[0,2,2,1,0,0],movable:false,rootString:6,family:"open",shapeName:"E" },
+    { id:"M-oa",label:"Aオープン",rootKey:9,frets:[-1,0,2,2,2,0],movable:false,rootString:5,family:"open",shapeName:"A" },
+    { id:"M-6r",label:"6弦ルート",rootKey:5,frets:[1,3,3,2,1,1],movable:true,rootString:6,family:"barre",shapeName:"E" },
+    { id:"M-5r",label:"5弦ルート",rootKey:10,frets:[-1,1,3,3,3,1],movable:true,rootString:5,family:"barre",shapeName:"A" },
+  ],
+  m: [
+    { id:"m-oam",label:"Amオープン",rootKey:9,frets:[-1,0,2,2,1,0],movable:false,rootString:5,family:"open",shapeName:"Am" },
+    { id:"m-oem",label:"Emオープン",rootKey:4,frets:[0,2,2,0,0,0],movable:false,rootString:6,family:"open",shapeName:"Em" },
+    { id:"m-odm",label:"Dmオープン",rootKey:2,frets:[-1,-1,0,2,3,1],movable:false,rootString:4,family:"open",shapeName:"Dm" },
+    { id:"m-6r",label:"6弦ルート",rootKey:5,frets:[1,3,3,1,1,1],movable:true,rootString:6,family:"barre",shapeName:"E" },
+    { id:"m-5r",label:"5弦ルート",rootKey:10,frets:[-1,1,3,3,2,1],movable:true,rootString:5,family:"barre",shapeName:"A" },
+    { id:"m-4r",label:"4弦ルート",rootKey:3,frets:[-1,-1,1,3,4,2],movable:true,rootString:4,family:"barre",shapeName:"D" },
+  ],
+  sus4: [
+    { id:"sus4-od",label:"Dsus4オープン",rootKey:2,frets:[-1,-1,0,2,3,3],movable:false,rootString:4,family:"open",shapeName:"D" },
+    { id:"sus4-oe",label:"Esus4オープン",rootKey:4,frets:[0,2,2,2,0,0],movable:false,rootString:6,family:"open",shapeName:"E" },
+    { id:"sus4-oa",label:"Asus4オープン",rootKey:9,frets:[-1,0,2,2,3,0],movable:false,rootString:5,family:"open",shapeName:"A" },
+    { id:"sus4-oc",label:"Csus4オープン",rootKey:0,frets:[-1,3,3,0,1,1],movable:false,rootString:5,family:"open",shapeName:"C" },
+    { id:"sus4-ogg",label:"Gsus4オープン",rootKey:7,frets:[3,3,0,0,1,3],movable:false,rootString:6,family:"open",shapeName:"G" },
+    { id:"sus4-6r",label:"6弦ルート",rootKey:5,frets:[1,3,3,3,1,1],movable:true,rootString:6,family:"barre",shapeName:"E" },
+    { id:"sus4-5r",label:"5弦ルート",rootKey:10,frets:[-1,1,3,3,4,1],movable:true,rootString:5,family:"barre",shapeName:"A" },
+  ],
+  aug: [
+    { id:"aug-6r",label:"6弦ルート",rootKey:5,frets:[1,-1,3,2,2,-1],movable:true,rootString:6,family:"partial",shapeName:"E" },
+    { id:"aug-5r",label:"5弦ルート",rootKey:0,frets:[-1,3,2,1,1,-1],movable:true,rootString:5,family:"partial",shapeName:"C" },
+    { id:"aug-4r",label:"4弦ルート",rootKey:5,frets:[-1,-1,3,2,2,1],movable:true,rootString:4,family:"barre",shapeName:"D" },
+  ],
+  dim: [
+    { id:"dim-6r",label:"6弦ルート",rootKey:6,frets:[2,-1,-1,2,1,2],movable:true,rootString:6,family:"partial",shapeName:"E" },
+    { id:"dim-5r",label:"5弦ルート",rootKey:10,frets:[-1,1,2,3,2,-1],movable:true,rootString:5,family:"barre",shapeName:"A" },
+  ],
+  M7: [
+    { id:"M7-oc",label:"Cmaj7オープン",rootKey:0,frets:[-1,3,2,0,0,0],movable:false,rootString:5,family:"open",shapeName:"C" },
+    { id:"M7-6r",label:"6弦ルート",rootKey:5,frets:[1,3,2,2,1,1],movable:true,rootString:6,family:"barre",shapeName:"E" },
+    { id:"M7-5r",label:"5弦ルート",rootKey:10,frets:[-1,1,3,2,3,1],movable:true,rootString:5,family:"barre",shapeName:"A" },
+    { id:"M7-4r",label:"4弦ルート",rootKey:3,frets:[-1,-1,1,3,3,3],movable:true,rootString:4,family:"barre",shapeName:"D" },
+  ],
+  m7: [
+    { id:"m7-oa",label:"Am7オープン",rootKey:9,frets:[-1,0,2,0,1,0],movable:false,rootString:5,family:"open",shapeName:"A" },
+    { id:"m7-oem7",label:"Em7オープン",rootKey:4,frets:[0,2,0,0,0,0],movable:false,rootString:6,family:"open",shapeName:"E" },
+    { id:"m7-6r",label:"6弦ルート",rootKey:5,frets:[1,3,1,1,1,1],movable:true,rootString:6,family:"barre",shapeName:"E" },
+    { id:"m7-5r",label:"5弦ルート",rootKey:10,frets:[-1,1,3,1,2,1],movable:true,rootString:5,family:"barre",shapeName:"A" },
+    { id:"m7-4r",label:"4弦ルート",rootKey:3,frets:[-1,-1,1,3,2,2],movable:true,rootString:4,family:"barre",shapeName:"D" },
+  ],
+  "7": [
+    { id:"7-oa",label:"A7オープン",rootKey:9,frets:[-1,0,2,0,2,0],movable:false,rootString:5,family:"open",shapeName:"A" },
+    { id:"7-oe7",label:"E7オープン",rootKey:4,frets:[0,2,0,1,0,0],movable:false,rootString:6,family:"open",shapeName:"E" },
+    { id:"7-6r",label:"6弦ルート",rootKey:5,frets:[1,3,1,2,1,1],movable:true,rootString:6,family:"barre",shapeName:"E" },
+    { id:"7-5r",label:"5弦ルート",rootKey:10,frets:[-1,1,3,1,3,1],movable:true,rootString:5,family:"barre",shapeName:"A" },
+    { id:"7-4r",label:"4弦ルート",rootKey:3,frets:[-1,-1,1,3,2,3],movable:true,rootString:4,family:"barre",shapeName:"D" },
+  ],
+  mM7: [
+    { id:"mM7-6r",label:"6弦ルート",rootKey:5,frets:[1,3,2,1,1,1],movable:true,rootString:6,family:"barre",shapeName:"E" },
+    { id:"mM7-5r",label:"5弦ルート",rootKey:10,frets:[-1,1,3,2,2,1],movable:true,rootString:5,family:"barre",shapeName:"A" },
+    { id:"mM7-4r",label:"4弦ルート",rootKey:3,frets:[-1,-1,1,3,3,2],movable:true,rootString:4,family:"barre",shapeName:"D" },
+  ],
+  m7b5: [
+    { id:"m7b5-6r",label:"6弦ルート",rootKey:6,frets:[2,-1,2,2,1,-1],movable:true,rootString:6,family:"partial",shapeName:"E" },
+    { id:"m7b5-5r",label:"5弦ルート",rootKey:10,frets:[-1,1,2,1,2,-1],movable:true,rootString:5,family:"partial",shapeName:"A" },
+    { id:"m7b5-4r",label:"4弦ルート",rootKey:3,frets:[-1,-1,1,2,2,2],movable:true,rootString:4,family:"barre",shapeName:"D" },
+  ],
+  dim7: [
+    { id:"dim7-6r",label:"6弦ルート",rootKey:6,frets:[2,-1,1,2,1,-1],movable:true,rootString:6,family:"partial",shapeName:"E" },
+    { id:"dim7-5r",label:"5弦ルート",rootKey:11,frets:[-1,2,3,1,3,-1],movable:true,rootString:5,family:"partial",shapeName:"A" },
+    { id:"dim7-4r",label:"4弦ルート",rootKey:3,frets:[-1,-1,1,2,1,2],movable:true,rootString:4,family:"barre",shapeName:"D" },
+  ],
+  "9": [
+    { id:"9-6r",label:"6弦ルート",rootKey:5,frets:[1,3,1,2,1,3],movable:true,rootString:6,family:"barre",shapeName:"E" },
+    { id:"9-6rc",label:"6弦ルート②",rootKey:6,frets:[2,-1,2,1,2,-1],movable:true,rootString:6,family:"partial",shapeName:"E" },
+    { id:"9-5r",label:"5弦ルート",rootKey:11,frets:[-1,2,1,2,2,2],movable:true,rootString:5,family:"barre",shapeName:"C" },
+    { id:"9-4r",label:"4弦ルート",rootKey:4,frets:[-1,-1,2,1,3,2],movable:true,rootString:4,family:"barre",shapeName:"D" },
+  ],
+  m9: [
+    { id:"m9-6r",label:"6弦ルート",rootKey:5,frets:[1,3,1,1,1,3],movable:true,rootString:6,family:"barre",shapeName:"E" },
+    { id:"m9-5r",label:"5弦ルート",rootKey:0,frets:[-1,3,1,3,3,-1],movable:true,rootString:5,family:"partial",shapeName:"A" },
+    { id:"m9-4r",label:"4弦ルート",rootKey:5,frets:[-1,-1,3,1,4,3],movable:true,rootString:4,family:"barre",shapeName:"D" },
+    { id:"m9-6r2",label:"6弦ルート②",rootKey:5,frets:[1,-1,1,1,1,3],movable:true,rootString:6,family:"partial",shapeName:"E" },
+  ],
+  M9: [
+    { id:"M9-6r",label:"6弦ルート",rootKey:6,frets:[2,-1,3,1,2,-1],movable:true,rootString:6,family:"partial",shapeName:"E" },
+    { id:"M9-5r1",label:"5弦ルート①",rootKey:11,frets:[-1,2,1,3,2,-1],movable:true,rootString:5,family:"partial",shapeName:"A" },
+    { id:"M9-5r2",label:"5弦ルート②",rootKey:10,frets:[-1,1,3,2,1,1],movable:true,rootString:5,family:"barre",shapeName:"A" },
+    { id:"M9-4r",label:"4弦ルート",rootKey:3,frets:[-1,-1,1,3,3,1],movable:true,rootString:4,family:"barre",shapeName:"D" },
+  ],
+  "11": [
+    { id:"11-6r",label:"6弦ルート",rootKey:7,frets:[3,-1,3,2,1,-1],movable:true,rootString:6,family:"partial",shapeName:"E" },
+    { id:"11-5r",label:"5弦ルート",rootKey:10,frets:[-1,1,1,1,1,1],movable:true,rootString:5,family:"barre",shapeName:"A" },
+    { id:"11-4r",label:"4弦ルート",rootKey:3,frets:[-1,-1,1,1,2,1],movable:true,rootString:4,family:"barre",shapeName:"D" },
+    { id:"11-5r2",label:"5弦ルート②",rootKey:0,frets:[-1,3,-1,3,3,1],movable:true,rootString:5,family:"partial",shapeName:"A" },
+  ],
+  m11: [
+    { id:"m11-5r",label:"5弦ルート",rootKey:10,frets:[-1,1,1,1,2,1],movable:true,rootString:5,family:"barre",shapeName:"A" },
+    { id:"m11-6r",label:"6弦ルート",rootKey:7,frets:[3,-1,3,3,1,-1],movable:true,rootString:6,family:"partial",shapeName:"E" },
+    { id:"m11-6r2",label:"6弦ルート②",rootKey:5,frets:[1,1,1,1,1,3],movable:true,rootString:6,family:"barre",shapeName:"E" },
+    { id:"m11-5r2",label:"5弦ルート②",rootKey:0,frets:[-1,3,1,3,3,1],movable:true,rootString:5,family:"partial",shapeName:"A" },
+    { id:"m11-4r",label:"4弦ルート",rootKey:3,frets:[-1,-1,1,1,2,2],movable:true,rootString:4,family:"barre",shapeName:"D" },
+  ],
+  "13": [
+    { id:"13-6rf",label:"6弦ルート（フル）",rootKey:5,frets:[1,3,1,2,3,1],movable:true,rootString:6,family:"barre",shapeName:"E" },
+    { id:"13-6r",label:"6弦ルート",rootKey:5,frets:[1,-1,1,2,3,-1],movable:true,rootString:6,family:"partial",shapeName:"E" },
+    { id:"13-5r",label:"5弦ルート",rootKey:10,frets:[-1,1,3,1,3,3],movable:true,rootString:5,family:"barre",shapeName:"A" },
+    { id:"13-5r2",label:"5弦ルート②",rootKey:11,frets:[-1,2,1,2,2,4],movable:true,rootString:5,family:"barre",shapeName:"A" },
+  ],
+  M13: [
+    { id:"M13-6r",label:"6弦ルート",rootKey:5,frets:[1,-1,2,2,3,-1],movable:true,rootString:6,family:"partial",shapeName:"E" },
+    { id:"M13-6r2",label:"6弦ルート②",rootKey:6,frets:[2,1,1,1,2,1],movable:true,rootString:6,family:"barre",shapeName:"E" },
+    { id:"M13-5r",label:"5弦ルート",rootKey:10,frets:[-1,1,3,2,3,3],movable:true,rootString:5,family:"barre",shapeName:"A" },
+  ],
+  b13: [
+    { id:"b13-6r",label:"6弦ルート",rootKey:5,frets:[1,-1,1,2,2,-1],movable:true,rootString:6,family:"partial",shapeName:"E" },
+    { id:"b13-5r",label:"5弦ルート",rootKey:10,frets:[-1,1,3,1,3,2],movable:true,rootString:5,family:"barre",shapeName:"A" },
+    { id:"b13-5r2",label:"5弦ルート②",rootKey:2,frets:[-1,5,4,3,1,-1],movable:true,rootString:5,family:"partial",shapeName:"A" },
+  ],
+  add9: [
+    { id:"add9-oc",label:"Cadd9オープン",rootKey:0,frets:[-1,3,2,0,3,0],movable:false,rootString:5,family:"open",shapeName:"C" },
+    { id:"add9-og",label:"Gadd9オープン",rootKey:7,frets:[3,0,0,0,0,3],movable:false,rootString:6,family:"open",shapeName:"G" },
+    { id:"add9-oe",label:"Eadd9オープン",rootKey:4,frets:[0,2,2,1,0,2],movable:false,rootString:6,family:"open",shapeName:"E" },
+    { id:"add9-od",label:"Dadd9オープン",rootKey:2,frets:[-1,-1,0,2,3,0],movable:false,rootString:4,family:"open",shapeName:"D" },
+    { id:"add9-oa",label:"Aadd9オープン",rootKey:9,frets:[-1,0,2,4,2,0],movable:false,rootString:5,family:"open",shapeName:"A" },
+    { id:"add9-6r",label:"6弦ルート",rootKey:5,frets:[1,3,5,2,1,1],movable:true,rootString:6,family:"barre",shapeName:"E" },
+    { id:"add9-5r",label:"5弦ルート",rootKey:10,frets:[-1,1,3,3,1,1],movable:true,rootString:5,family:"barre",shapeName:"A" },
+    { id:"add9-4r",label:"4弦ルート",rootKey:5,frets:[-1,-1,3,2,1,3],movable:true,rootString:4,family:"barre",shapeName:"D" },
+  ],
+  "69": [
+    { id:"69-6r",label:"6弦ルート",rootKey:6,frets:[2,1,1,1,2,2],movable:true,rootString:6,family:"barre",shapeName:"E" },
+    { id:"69-5r",label:"5弦ルート",rootKey:11,frets:[-1,2,1,1,2,2],movable:true,rootString:5,family:"barre",shapeName:"A" },
+    { id:"69-4r",label:"4弦ルート",rootKey:4,frets:[-1,-1,2,1,2,2],movable:true,rootString:4,family:"barre",shapeName:"D" },
+  ],
+  "7#9": [
+    { id:"7s9-6r",label:"6弦ルート",rootKey:6,frets:[2,1,2,2,-1,-1],movable:true,rootString:6,family:"partial",shapeName:"E" },
+    { id:"7s9-5r",label:"5弦ルート",rootKey:11,frets:[-1,2,1,2,3,-1],movable:true,rootString:5,family:"partial",shapeName:"A" },
+    { id:"7s9-4r",label:"4弦ルート",rootKey:4,frets:[-1,-1,2,1,3,3],movable:true,rootString:4,family:"barre",shapeName:"D" },
+  ],
+  "6": [
+    { id:"6-oc",label:"C6オープン",rootKey:0,frets:[-1,3,2,2,1,0],movable:false,rootString:5,family:"open",shapeName:"C" },
+    { id:"6-og6",label:"G6オープン",rootKey:7,frets:[3,2,0,0,0,0],movable:false,rootString:6,family:"open",shapeName:"G" },
+    { id:"6-6r",label:"6弦ルート",rootKey:5,frets:[1,-1,3,2,3,-1],movable:true,rootString:6,family:"partial",shapeName:"E" },
+    { id:"6-6r2",label:"6弦ルート②",rootKey:6,frets:[2,-1,1,3,2,-1],movable:true,rootString:6,family:"partial",shapeName:"E" },
+    { id:"6-5r",label:"5弦ルート",rootKey:10,frets:[-1,1,3,3,3,3],movable:true,rootString:5,family:"barre",shapeName:"A" },
+    { id:"6-4r",label:"4弦ルート",rootKey:3,frets:[-1,-1,1,3,1,3],movable:true,rootString:4,family:"barre",shapeName:"D" },
+  ],
+  m6: [
+    { id:"m6-oa",label:"Am6オープン",rootKey:9,frets:[-1,0,2,2,1,2],movable:false,rootString:5,family:"open",shapeName:"A" },
+    { id:"m6-6r",label:"6弦ルート",rootKey:5,frets:[1,3,3,1,3,1],movable:true,rootString:6,family:"barre",shapeName:"E" },
+    { id:"m6-6r2",label:"6弦ルート②",rootKey:6,frets:[2,-1,1,2,2,-1],movable:true,rootString:6,family:"partial",shapeName:"E" },
+    { id:"m6-4r",label:"4弦ルート",rootKey:3,frets:[-1,-1,1,3,1,2],movable:true,rootString:4,family:"barre",shapeName:"D" },
+  ],
+};
+
+/* ─── 開発用検証（DEV_VALIDATE = true で有効化） ─── */
+const DEV_VALIDATE = false;
+/* validateFormDB / validateTransposeDisplay は開発時のみ使用。
+   DEV_VALIDATE を true にして console で確認する。
+   本番では false のまま。検証関数は省略（JSX版に同梱済み）。 */
+
+function transposeForms(type, targetRoot) {
+  const templates = FORM_DB[type];
+  if (!templates) return [];
+  return templates.map(tmpl => {
+    if (!tmpl.movable) {
+      if (tmpl.rootKey !== targetRoot) return null;
+      return Object.assign({}, tmpl, { _type: type, _rootPc: tmpl.rootKey });
+    }
+    const shift = mod12(targetRoot - tmpl.rootKey);
+    const frets = tmpl.frets.map(f => (f <= 0 ? f : f + shift));
+    const played = frets.filter(f => f > 0);
+    if (played.length > 0 && Math.max(...played) > 14) {
+      const lowered = frets.map(f => (f > 0 ? f - 12 : f));
+      if (lowered.filter(f => f > 0).every(f => f >= 1))
+        return Object.assign({}, tmpl, { frets: lowered, _type: type, _rootPc: targetRoot });
+    }
+    return Object.assign({}, tmpl, { frets, _type: type, _rootPc: targetRoot });
+  }).filter(Boolean);
+}
+
+const DEG_COLORS = {
+  root:    { color: "#d9534f", label: "R" },
+  third:   { color: "#2e8b57", label: "3rd" },
+  fifth:   { color: "#2b7de0", label: "5th" },
+  seventh: { color: "#7b5ea7", label: "7th" },
+  tension: { color: "#d48a29", label: "tension" },
+};
+
+function degColor(deg) {
+  if (deg === "R") return DEG_COLORS.root.color;
+  if (["3","♭3"].includes(deg)) return DEG_COLORS.third.color;
+  if (["5","♭5","♯5"].includes(deg)) return DEG_COLORS.fifth.color;
+  if (["♭7","7","°7"].includes(deg)) return DEG_COLORS.seventh.color;
+  return DEG_COLORS.tension.color;
+}
+
+function ChordDiagram({ form, theme: T, dark }) {
+  const { frets, label, family, rootString, shapeName, _type, _rootPc } = form;
+  const { degLabels, omittedDegrees } = (_type && _rootPc !== undefined)
+    ? computeFormDegreeInfo(frets, _rootPc, _type)
+    : { degLabels: frets.map(() => ""), omittedDegrees: [] };
+  const playedFrets = frets.filter(f => f > 0);
+  const minP = playedFrets.length ? Math.min(...playedFrets) : 1;
+  const maxP = playedFrets.length ? Math.max(...playedFrets) : 4;
+  const hasOpen = frets.some(f => f === 0);
+  const numFrets = Math.max(4, Math.min(5, (playedFrets.length > 0 ? maxP - minP : 0) + 2));
+  let startFret = (hasOpen || minP <= 3) ? 1 : Math.max(1, minP);
+  if (playedFrets.length > 0 && maxP > startFret + numFrets - 1) startFret = maxP - numFrets + 1;
+  const showNut = startFret === 1;
+  const fW = 40, sG = 24, pL = 28, pR = 12, pT = 14, pB = 24, nX = pL;
+  const w = pL + numFrets * fW + pR, h = pT + 5 * sG + pB;
+  const sY = si => pT + (5 - si) * sG;
+  const fX = fn => nX + (fn - startFret + 0.5) * fW;
+  const familyJa = FAMILY_LABEL[family] || family;
+  const infoText = `${familyJa} · ${rootString}弦R · ${shapeName}`;
+  const omitText = omittedDegrees.length > 0 ? `省${omittedDegrees.join("・")}` : null;
+
+  return (
+    <div style={{ background: T.card, borderRadius: 12, padding: "12px 10px 8px", border: `1px solid ${T.border}` }}>
+      <div style={{ textAlign: "center", marginBottom: 4 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{label}</div>
+        <div style={{ fontSize: 10, color: T.muted, marginTop: 2, letterSpacing: 0.3, opacity: 0.85 }}>{infoText}</div>
+      </div>
+      <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", display: "block" }}>
+        {showNut && <line x1={nX} y1={pT - 4} x2={nX} y2={pT + 5 * sG + 4} stroke={T.nutCol} strokeWidth={4} strokeLinecap="round" />}
+        {Array.from({ length: numFrets + 1 }, (_, i) => (
+          <line key={"f"+i} x1={nX + i * fW} y1={pT - 4} x2={nX + i * fW} y2={pT + 5 * sG + 4}
+            stroke={i === 0 && showNut ? "none" : T.fretCol} strokeWidth={1.5} />
+        ))}
+        {Array.from({ length: 6 }, (_, si) => (
+          <line key={"s"+si} x1={nX} y1={sY(si)} x2={nX + numFrets * fW} y2={sY(si)}
+            stroke={T.strCol} strokeWidth={2.5 - si * 0.3} />
+        ))}
+        {Array.from({ length: numFrets }, (_, i) => (
+          <text key={"n"+i} x={nX + (i + 0.5) * fW} y={h - 4}
+            fontSize={12} fill={T.muted} fontWeight={600} textAnchor="middle" fontFamily="sans-serif">{startFret + i}</text>
+        ))}
+        {frets.map((f, si) => {
+          const y = sY(si), deg = degLabels[si];
+          if (f === -1) return <text key={si} x={nX - 14} y={y + 1} textAnchor="middle" dominantBaseline="central" fontSize={12} fill={T.dotMute} fontFamily="sans-serif">✕</text>;
+          if (f === 0) return (<g key={si}><circle cx={nX - 14} cy={y} r={11} fill="none" stroke={T.strCol} strokeWidth={1.5} />{deg && <text x={nX - 14} y={y + 1} textAnchor="middle" dominantBaseline="central" fontSize={14} fill={T.strCol} fontWeight={800} fontFamily="sans-serif">{deg}</text>}</g>);
+          if (f < startFret) return (<g key={si}><polygon points={nX-8+","+(y-5)+" "+nX-8+","+(y+5)+" "+(nX-18)+","+y} fill={degColor(deg)} /><text x={nX - 12} y={y + 1} textAnchor="middle" dominantBaseline="central" fontSize={6} fill="#fff" fontWeight={700} fontFamily="sans-serif">{deg}</text></g>);
+          const cx = fX(f), col = degColor(deg), isR = deg === "R";
+          const dotR = 12;
+          const isLong = deg.length > 1;
+          const fs = isR ? (isLong ? 11 : 14) : (isLong ? 10 : 13);
+          return (<g key={si}><circle cx={cx} cy={y} r={dotR} fill={col} />{isR && <circle cx={cx} cy={y} r={dotR} fill="none" stroke="#fff" strokeWidth={2} />}<text x={cx} y={y + 1} textAnchor="middle" dominantBaseline="central" fontSize={fs} fontWeight={800} fill="#fff" fontFamily="sans-serif">{deg}</text></g>);
+        })}
+      </svg>
+      {omitText && (
+        <div style={{ textAlign: "center", marginTop: 5 }}>
+          <span style={{
+            display: "inline-block", fontSize: 10, fontWeight: 700,
+            padding: "2px 8px", borderRadius: 4,
+            background: dark ? "rgba(217,167,41,0.15)" : "rgba(212,138,41,0.12)",
+            color: dark ? "#d4a829" : "#b07818",
+            letterSpacing: 0.5, lineHeight: 1.4,
+          }}>{omitText}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const ALL_ROOTS = [
+  { pc: 0, sharp: "C",  flat: "C"  },
+  { pc: 1, sharp: "C♯", flat: "D♭" },
+  { pc: 2, sharp: "D",  flat: "D"  },
+  { pc: 3, sharp: "D♯", flat: "E♭" },
+  { pc: 4, sharp: "E",  flat: "E"  },
+  { pc: 5, sharp: "F",  flat: "F"  },
+  { pc: 6, sharp: "F♯", flat: "G♭" },
+  { pc: 7, sharp: "G",  flat: "G"  },
+  { pc: 8, sharp: "G♯", flat: "A♭" },
+  { pc: 9, sharp: "A",  flat: "A"  },
+  { pc:10, sharp: "A♯", flat: "B♭" },
+  { pc:11, sharp: "B",  flat: "B"  },
+];
+
+function App() {
+  const [rootPc, setRootPc] = useState(0);
+  const [useFlat, setUseFlat] = useState(false);
+  const [chordType, setChordType] = useState("M");
+  const [dark, setDark] = useState(false);
+
+  const NOTES = useFlat ? NOTES_FLAT : NOTES_SHARP;
+  const ct = CHORD_TYPES[chordType];
+  const rootName = NOTES[rootPc];
+  const chordName = rootName + ct.suffix;
+
+  const notesDeg = useMemo(() =>
+    ct.iv.map((iv, i) => ({ note: NOTES[mod12(rootPc + iv)], deg: ct.deg[i] }))
+  , [rootPc, chordType, useFlat]);
+
+  const forms = useMemo(() => transposeForms(chordType, rootPc), [chordType, rootPc]);
+  const groupedTypes = useMemo(() => CATEGORIES.map(cat => ({ ...cat, types: TYPE_ORDER.filter(k => CHORD_TYPES[k].cat === cat.key) })), []);
+
+  const isNatural = NATURAL_PCS.has(rootPc);
+
+  const T = dark
+    ? { bg:"#1a1a1a", card:"#2a2a2a", border:"#3a3a3a", text:"#f0f0f0", muted:"#999", faint:"#555",
+        btnBg:"#333", btnText:"#f0f0f0", btnOffBg:"#2a2a2a", btnOffText:"#aaa",
+        infoBg:"#222", infoText:"#f0f0f0", infoMuted:"#888",
+        nutCol:"#d4c5a0", strCol:"#666", fretCol:"#555", dotMute:"#666" }
+    : { bg:"#fff", card:"#fafaf8", border:"#e8e8e4", text:"#222", muted:"#aaa", faint:"#ccc",
+        btnBg:"#333", btnText:"#fff", btnOffBg:"#f0f0ee", btnOffText:"#444",
+        infoBg:"#f8f8f6", infoText:"#222", infoMuted:"#aaa",
+        nutCol:"#222", strCol:"#999", fretCol:"#ccc", dotMute:"#aaa" };
+
+  const rBtn = a => ({
+    padding:"7px 0", fontSize:13, fontWeight:700, borderRadius:8, border:"none", cursor:"pointer",
+    background: a ? T.btnBg : T.btnOffBg, color: a ? T.btnText : T.btnOffText,
+    width:44, textAlign:"center", transition:"all .12s",
+  });
+  const tBtn = a => ({
+    padding:"5px 9px", fontSize:11, fontWeight:600, borderRadius:6, cursor:"pointer", transition:"all .12s",
+    border: a ? "2px solid #d9534f" : "1px solid "+T.border,
+    background: a ? "#d9534f" : dark ? T.card : "#fff", color: a ? "#fff" : dark ? "#ccc" : "#555",
+  });
+
+  return (
+    <div style={{ padding:"20px 16px", maxWidth:500, margin:"0 auto", fontFamily:"'Helvetica Neue',Arial,sans-serif", color:T.text, background:T.bg, minHeight:"100vh" }}>
+      <div style={{ display:"flex", justifyContent:"center", alignItems:"center", marginBottom:16, position:"relative" }}>
+        <p style={{ fontSize:16, color:T.muted, margin:0, fontWeight:700 }}>Chord Quick Viewer</p>
+        <button onClick={() => setDark(d => !d)} style={{
+          position:"absolute", right:0, padding:"4px 8px", fontSize:11, borderRadius:6,
+          border:"1px solid "+T.border, background:dark?T.card:"#f0f0ee", color:T.muted,
+          cursor:"pointer", fontWeight:600,
+        }}>{dark ? "☀" : "🌙"}</button>
+      </div>
+
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
+        <div style={{ display:"flex", gap:4, flex:1, justifyContent:"center" }}>
+          {[{n:"C",p:0},{n:"D",p:2},{n:"E",p:4},{n:"F",p:5},{n:"G",p:7},{n:"A",p:9},{n:"B",p:11}].map(x => (
+            <button key={x.p} onClick={() => setRootPc(x.p)}
+              style={rBtn(rootPc === x.p)}>{x.n}</button>
+          ))}
+        </div>
+        <div style={{ display:"flex", gap:3, flexShrink:0 }}>
+          <button onClick={() => {
+            setUseFlat(false);
+            if (isNatural) setRootPc(mod12(rootPc + 1));
+            else setRootPc(mod12(rootPc - 1));
+          }} style={{
+            padding:"6px 10px", fontSize:14, fontWeight:800, borderRadius:8, cursor:"pointer", minWidth:36,
+            border: !isNatural && !useFlat ? "2px solid #d9534f" : "1px solid "+T.border,
+            background: !isNatural && !useFlat ? "#d9534f" : dark ? T.card : "#fff",
+            color: !isNatural && !useFlat ? "#fff" : dark ? "#ccc" : "#555",
+          }}>♯</button>
+          <button onClick={() => {
+            setUseFlat(true);
+            if (isNatural) setRootPc(mod12(rootPc - 1));
+            else setRootPc(mod12(rootPc + 1));
+          }} style={{
+            padding:"6px 10px", fontSize:14, fontWeight:800, borderRadius:8, cursor:"pointer", minWidth:36,
+            border: !isNatural && useFlat ? "2px solid #d9534f" : "1px solid "+T.border,
+            background: !isNatural && useFlat ? "#d9534f" : dark ? T.card : "#fff",
+            color: !isNatural && useFlat ? "#fff" : dark ? "#ccc" : "#555",
+          }}>♭</button>
+        </div>
+      </div>
+
+      {!isNatural && (
+        <div style={{ textAlign:"center", marginBottom:8, fontSize:11, color:T.muted }}>
+          = {useFlat ? ALL_ROOTS[rootPc].sharp : ALL_ROOTS[rootPc].flat}
+        </div>
+      )}
+
+      <div style={{ marginBottom:18 }}>
+        {groupedTypes.map(g => (
+          <div key={g.key} style={{ marginBottom:8 }}>
+            <div style={{ fontSize:9, fontWeight:700, color:T.muted, letterSpacing:1.5, textTransform:"uppercase", marginBottom:4, textAlign:"center" }}>{g.label}</div>
+            <div style={{
+              display:"flex", justifyContent:"center", gap:4, flexWrap:"wrap",
+              maxWidth: g.key === "tension" ? 380 : undefined, margin:"0 auto",
+            }}>
+              {g.types.map(t => (
+                <button key={t} onClick={() => setChordType(t)} style={tBtn(t === chordType)}>{CHORD_TYPES[t].uiLabel}</button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ textAlign:"center", marginBottom:12, padding:"12px 16px", background:T.infoBg, borderRadius:10, border:"1px solid "+T.border }}>
+        <h1 style={{ fontSize:28, fontWeight:900, margin:"0 0 8px", letterSpacing:1, color:T.infoText }}>{chordName}</h1>
+        <div style={{ display:"flex", justifyContent:"center", gap:20, flexWrap:"wrap" }}>
+          <div style={{ textAlign:"center" }}>
+            <div style={{ fontSize:9, color:T.infoMuted, fontWeight:600, marginBottom:3, letterSpacing:1 }}>構成音</div>
+            <div style={{ fontSize:15, fontWeight:700, letterSpacing:3, color:T.infoText }}>{notesDeg.map(nd => nd.note).join("  ")}</div>
+          </div>
+          <div style={{ width:1, background:T.border }} />
+          <div style={{ textAlign:"center" }}>
+            <div style={{ fontSize:9, color:T.infoMuted, fontWeight:600, marginBottom:3, letterSpacing:1 }}>度数</div>
+            <div style={{ fontSize:15, fontWeight:700, letterSpacing:3, color:T.infoText }}>{notesDeg.map(nd => nd.deg).join("  ")}</div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display:"flex", justifyContent:"center", gap:12, marginBottom:10, flexWrap:"wrap" }}>
+        {Object.values(DEG_COLORS).map(item => (
+          <div key={item.label} style={{ display:"flex", alignItems:"center", gap:3 }}>
+            <span style={{
+              display:"inline-block", width:8, height:8, borderRadius:"50%",
+              background:item.color, flexShrink:0,
+            }} />
+            <span style={{ fontSize:10, color:T.muted, fontWeight:600, letterSpacing:0.3 }}>{item.label}</span>
+          </div>
+        ))}
+      </div>
+
+      {forms.length === 0 ? (
+        <div style={{ textAlign:"center", padding:32, color:T.muted, fontSize:13, background:T.card, borderRadius:10, border:"1px solid "+T.border }}>
+          表示できるフォームがありません。<br />別のキーまたはコードタイプを選んでください。
+        </div>
+      ) : (
+        <div style={{ display:"grid", gridTemplateColumns: forms.length === 1 ? "1fr" : "1fr 1fr", gap:10 }}>
+          {forms.map(form => <ChordDiagram key={form.id} form={form} theme={T} dark={dark} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
