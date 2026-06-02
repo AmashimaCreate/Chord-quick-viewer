@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#fafaf8"/>
+  <rect x="74" y="64" width="1052" height="502" rx="36" fill="#ffffff" stroke="#e8e8e4" stroke-width="4"/>
+  <text x="120" y="166" font-family="Arial, sans-serif" font-size="54" font-weight="800" fill="#222222">Chord Quick Viewer</text>
+  <text x="120" y="226" font-family="Arial, sans-serif" font-size="28" font-weight="600" fill="#666666">Guitar chord forms, notes, and degrees</text>
+  <g transform="translate(690 114)">
+    <rect x="0" y="0" width="360" height="410" rx="28" fill="#f8f8f6" stroke="#e8e8e4" stroke-width="3"/>
+    <text x="180" y="72" text-anchor="middle" font-family="Arial, sans-serif" font-size="48" font-weight="900" fill="#222222">C</text>
+    <path d="M70 140h260M70 200h260M70 260h260M70 320h260M70 380h260M80 120v280M145 120v280M210 120v280M275 120v280M320 120v280" stroke="#b8b8b4" stroke-width="6" stroke-linecap="round"/>
+    <path d="M80 120v280" stroke="#333333" stroke-width="10" stroke-linecap="round"/>
+    <circle cx="80" cy="200" r="34" fill="#d9534f"/>
+    <circle cx="210" cy="320" r="34" fill="#3a9b5d"/>
+    <circle cx="275" cy="260" r="34" fill="#d9534f"/>
+    <text x="80" y="213" text-anchor="middle" font-family="Arial, sans-serif" font-size="34" font-weight="900" fill="#ffffff">R</text>
+    <text x="210" y="333" text-anchor="middle" font-family="Arial, sans-serif" font-size="34" font-weight="900" fill="#ffffff">3</text>
+    <text x="275" y="273" text-anchor="middle" font-family="Arial, sans-serif" font-size="34" font-weight="900" fill="#ffffff">R</text>
+  </g>
+  <g transform="translate(120 306)">
+    <rect width="82" height="54" rx="14" fill="#333333"/>
+    <rect x="100" width="82" height="54" rx="14" fill="#f0f0ee"/>
+    <rect x="200" width="82" height="54" rx="14" fill="#f0f0ee"/>
+    <rect x="300" width="82" height="54" rx="14" fill="#f0f0ee"/>
+    <text x="41" y="36" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="800" fill="#ffffff">C</text>
+    <text x="141" y="36" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="800" fill="#444444">D</text>
+    <text x="241" y="36" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="800" fill="#444444">E</text>
+    <text x="341" y="36" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="800" fill="#444444">F</text>
+  </g>
+  <text x="120" y="458" font-family="Arial, sans-serif" font-size="34" font-weight="800" fill="#222222">構成音・度数・フォームをすばやく確認</text>
+  <text x="120" y="512" font-family="Arial, sans-serif" font-size="24" font-weight="600" fill="#777777">amashimacreate.github.io/Chord-quick-viewer</text>
+</svg>
