@@ -394,6 +394,7 @@ function App() {
   const groupedTypes = useMemo(() => CATEGORIES.map(cat => ({ ...cat, types: TYPE_ORDER.filter(k => CHORD_TYPES[k].cat === cat.key) })), []);
 
   const isNatural = NATURAL_PCS.has(rootPc);
+  const isNarrow = window.innerWidth <= 520;
 
   const T = dark
     ? { bg:"#1a1a1a", card:"#2a2a2a", border:"#3a3a3a", text:"#f0f0f0", muted:"#999", faint:"#555",
@@ -417,7 +418,7 @@ function App() {
   });
 
   return (
-    <div style={{ padding:"20px 16px", maxWidth:500, margin:"0 auto", fontFamily:"'Helvetica Neue',Arial,sans-serif", color:T.text, background:T.bg, minHeight:"100vh" }}>
+    <div style={{ padding:"20px 16px", width:"min(500px, 100vw)", maxWidth:"100vw", margin:"0 auto", fontFamily:"'Helvetica Neue',Arial,sans-serif", color:T.text, background:T.bg, minHeight:"100vh", overflowX:"hidden" }}>
       <div style={{ display:"flex", justifyContent:"center", alignItems:"center", marginBottom:16, position:"relative" }}>
         <p style={{ fontSize:16, color:T.muted, margin:0, fontWeight:700 }}>Chord Quick Viewer</p>
         <button onClick={() => setDark(d => !d)} style={{
@@ -427,14 +428,14 @@ function App() {
         }}>{dark ? "☀" : "🌙"}</button>
       </div>
 
-      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
-        <div style={{ display:"flex", gap:4, flex:1, justifyContent:"center" }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, marginBottom:14, flexWrap:"wrap" }}>
+        <div style={{ display:"flex", gap:4, flex:"1 1 100%", justifyContent:"center", flexWrap:"wrap", minWidth:0 }}>
           {[{n:"C",p:0},{n:"D",p:2},{n:"E",p:4},{n:"F",p:5},{n:"G",p:7},{n:"A",p:9},{n:"B",p:11}].map(x => (
             <button key={x.p} onClick={() => setRootPc(x.p)}
               style={rBtn(rootPc === x.p)}>{x.n}</button>
           ))}
         </div>
-        <div style={{ display:"flex", gap:3, flexShrink:0 }}>
+        <div style={{ display:"flex", gap:3, flex:"0 0 auto" }}>
           <button onClick={() => {
             setUseFlat(false);
             if (isNatural) setRootPc(mod12(rootPc + 1));
@@ -512,7 +513,7 @@ function App() {
           表示できるフォームがありません。<br />別のキーまたはコードタイプを選んでください。
         </div>
       ) : (
-        <div style={{ display:"grid", gridTemplateColumns: forms.length === 1 ? "1fr" : "1fr 1fr", gap:10 }}>
+        <div style={{ display:"grid", gridTemplateColumns: isNarrow || forms.length === 1 ? "1fr" : "1fr 1fr", gap:10 }}>
           {forms.map(form => <ChordDiagram key={form.id} form={form} theme={T} dark={dark} />)}
         </div>
       )}
