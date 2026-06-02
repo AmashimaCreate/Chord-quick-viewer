@@ -1655,6 +1655,8 @@ function App() {
     }
   }, "Chord Quick Viewer"), /*#__PURE__*/React.createElement("button", {
     onClick: () => setDark(d => !d),
+    "aria-label": dark ? "ライトテーマに切り替え" : "ダークテーマに切り替え",
+    title: dark ? "ライトテーマに切り替え" : "ダークテーマに切り替え",
     style: {
       position: "absolute",
       right: 0,
