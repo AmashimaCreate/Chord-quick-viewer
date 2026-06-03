@@ -51,7 +51,15 @@ const {
 
 const NOTES_SHARP = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
 const NOTES_FLAT = ["C", "D♭", "D", "E♭", "E", "F", "G♭", "G", "A♭", "A", "B♭", "B"];
-const NATURAL_PCS = new Set([0, 2, 4, 5, 7, 9, 11]);
+const NATURAL_LABELS = {
+  0: "C",
+  2: "D",
+  4: "E",
+  5: "F",
+  7: "G",
+  9: "A",
+  11: "B"
+};
 const mod12 = n => (n % 12 + 12) % 12;
 const TUNING_PC = [4, 9, 2, 7, 11, 4];
 const CATEGORIES = [{
@@ -1547,12 +1555,14 @@ const ALL_ROOTS = [{
 }];
 function App() {
   const [rootPc, setRootPc] = useState(0);
+  const [selectedNaturalPc, setSelectedNaturalPc] = useState(0);
   const [useFlat, setUseFlat] = useState(false);
   const [chordType, setChordType] = useState("M");
   const [dark, setDark] = useState(false);
   const NOTES = useFlat ? NOTES_FLAT : NOTES_SHARP;
   const ct = CHORD_TYPES[chordType];
-  const rootName = NOTES[rootPc];
+  const hasAccidental = rootPc !== selectedNaturalPc;
+  const rootName = hasAccidental ? NATURAL_LABELS[selectedNaturalPc] + (useFlat ? "♭" : "♯") : NOTES[rootPc];
   const chordName = rootName + ct.suffix;
   const notesDeg = useMemo(() => ct.iv.map((iv, i) => ({
     note: NOTES[mod12(rootPc + iv)],
@@ -1563,8 +1573,6 @@ function App() {
     ...cat,
     types: TYPE_ORDER.filter(k => CHORD_TYPES[k].cat === cat.key)
   })), []);
-  const isNatural = NATURAL_PCS.has(rootPc);
-  const selectedNaturalPc = isNatural ? rootPc : useFlat ? mod12(rootPc + 1) : mod12(rootPc - 1);
   const isNarrow = window.innerWidth <= 520;
   const T = dark ? {
     bg: "#1a1a1a",
@@ -1712,7 +1720,11 @@ function App() {
     p: 11
   }].map(x => /*#__PURE__*/React.createElement("button", {
     key: x.p,
-    onClick: () => setRootPc(x.p),
+    onClick: () => {
+      setSelectedNaturalPc(x.p);
+      setRootPc(x.p);
+      setUseFlat(false);
+    },
     "aria-pressed": selectedNaturalPc === x.p,
     style: rBtn(selectedNaturalPc === x.p)
   }, x.n))), /*#__PURE__*/React.createElement("div", {
@@ -1724,10 +1736,10 @@ function App() {
   }, /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setUseFlat(false);
-      if (isNatural) setRootPc(mod12(rootPc + 1));
+      setRootPc(mod12(selectedNaturalPc + 1));
     },
     "aria-label": "シャープ側に切り替え",
-    "aria-pressed": !isNatural && !useFlat,
+    "aria-pressed": hasAccidental && !useFlat,
     title: "シャープ側に切り替え",
     style: {
       padding: "6px 10px",
@@ -1736,17 +1748,17 @@ function App() {
       borderRadius: 8,
       cursor: "pointer",
       minWidth: 36,
-      border: !isNatural && !useFlat ? "2px solid #d9534f" : "1px solid " + T.border,
-      background: !isNatural && !useFlat ? "#d9534f" : dark ? T.card : "#fff",
-      color: !isNatural && !useFlat ? "#fff" : dark ? "#ccc" : "#555"
+      border: hasAccidental && !useFlat ? "2px solid #d9534f" : "1px solid " + T.border,
+      background: hasAccidental && !useFlat ? "#d9534f" : dark ? T.card : "#fff",
+      color: hasAccidental && !useFlat ? "#fff" : dark ? "#ccc" : "#555"
     }
   }, "\u266F"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setUseFlat(true);
-      if (isNatural) setRootPc(mod12(rootPc - 1));
+      setRootPc(mod12(selectedNaturalPc - 1));
     },
     "aria-label": "フラット側に切り替え",
-    "aria-pressed": !isNatural && useFlat,
+    "aria-pressed": hasAccidental && useFlat,
     title: "フラット側に切り替え",
     style: {
       padding: "6px 10px",
@@ -1755,11 +1767,11 @@ function App() {
       borderRadius: 8,
       cursor: "pointer",
       minWidth: 36,
-      border: !isNatural && useFlat ? "2px solid #d9534f" : "1px solid " + T.border,
-      background: !isNatural && useFlat ? "#d9534f" : dark ? T.card : "#fff",
-      color: !isNatural && useFlat ? "#fff" : dark ? "#ccc" : "#555"
+      border: hasAccidental && useFlat ? "2px solid #d9534f" : "1px solid " + T.border,
+      background: hasAccidental && useFlat ? "#d9534f" : dark ? T.card : "#fff",
+      color: hasAccidental && useFlat ? "#fff" : dark ? "#ccc" : "#555"
     }
-  }, "\u266D"))), !isNatural && /*#__PURE__*/React.createElement("div", {
+  }, "\u266D"))), hasAccidental && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       marginBottom: 8,
