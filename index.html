@@ -1564,6 +1564,7 @@ function App() {
     types: TYPE_ORDER.filter(k => CHORD_TYPES[k].cat === cat.key)
   })), []);
   const isNatural = NATURAL_PCS.has(rootPc);
+  const selectedNaturalPc = isNatural ? rootPc : useFlat ? mod12(rootPc + 1) : mod12(rootPc - 1);
   const isNarrow = window.innerWidth <= 520;
   const T = dark ? {
     bg: "#1a1a1a",
@@ -1712,8 +1713,8 @@ function App() {
   }].map(x => /*#__PURE__*/React.createElement("button", {
     key: x.p,
     onClick: () => setRootPc(x.p),
-    "aria-pressed": rootPc === x.p,
-    style: rBtn(rootPc === x.p)
+    "aria-pressed": selectedNaturalPc === x.p,
+    style: rBtn(selectedNaturalPc === x.p)
   }, x.n))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
