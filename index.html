@@ -1736,7 +1736,7 @@ function App() {
   }, /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setUseFlat(false);
-      setRootPc(mod12(selectedNaturalPc + 1));
+      setRootPc(hasAccidental && !useFlat ? selectedNaturalPc : mod12(selectedNaturalPc + 1));
     },
     "aria-label": "シャープ側に切り替え",
     "aria-pressed": hasAccidental && !useFlat,
@@ -1755,7 +1755,7 @@ function App() {
   }, "\u266F"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setUseFlat(true);
-      setRootPc(mod12(selectedNaturalPc - 1));
+      setRootPc(hasAccidental && useFlat ? selectedNaturalPc : mod12(selectedNaturalPc - 1));
     },
     "aria-label": "フラット側に切り替え",
     "aria-pressed": hasAccidental && useFlat,
