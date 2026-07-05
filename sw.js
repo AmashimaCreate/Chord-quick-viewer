@@ -3,8 +3,6 @@ const LOCAL_ASSETS = [
   "./",
   "./index.html",
   "./favicon.svg",
-  "./pwa-192.png",
-  "./pwa-512.png",
   "./og-image.png",
   "./manifest.webmanifest",
   "https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js",
