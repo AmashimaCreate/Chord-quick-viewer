@@ -1,0 +1,28 @@
+{
+  "id": "./",
+  "name": "Chord Quick Viewer",
+  "short_name": "Chord Viewer",
+  "description": "ギターコードの構成音、度数、押さえ方をすばやく確認できるコードフォームビューア。",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "pwa-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
