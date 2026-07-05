@@ -6,7 +6,6 @@ const LOCAL_ASSETS = [
   "./pwa-192.png",
   "./pwa-512.png",
   "./og-image.png",
-  "./og-image.svg",
   "./manifest.webmanifest",
   "https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js",
   "https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"
